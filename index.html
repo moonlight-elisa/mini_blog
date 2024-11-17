@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+<body>
+
+    <h1>Inscription</h1>
+
+    <form action="index.php" method="POST" enctype="multipart/form-data">
+        <input type="text" name="nom" placeholder="Nom" required>
+        <input type="email" name="email" placeholder="Email" required>
+        <input type="password" name="mot_de_passe" placeholder="Mot de passe" required>
+        <input type="file" name="photo_profil">
+        <button type="submit">S'inscrire</button>
+      </form>
+
+      <h2>Connexion</h2>
+
+      <form action="index.php" method="POST">
+        <input type="email" name="email" placeholder="Email" required>
+        <input type="password" name="mot_de_passe" placeholder="Mot de passe" required>
+        <input name="photo_profil" required>
+        <button type="submit">Se connecter</button>
+      </form>
+
+</body>
+</html>
+  
+
+<?php
+session_start();
+
+// Connexion
+
+if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['email'], $_POST['mot_de_passe']) && !isset($_POST['nom'])) {
+
+    $email = $_POST['email'];
+    $mot_de_passe = $_POST['mot_de_passe'];
+    $utilisateur=['nom'];
+
+    $stmt = $conn->prepare("SELECT * FROM utilisateurs WHERE email = ?");
+    $stmt->bindParam(':email', $email);
+    $stmt->execute([$email]); // Exécutez la requête ici
+    $utilisateur = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    // Vérifier si $utilisateur est un tableau
+    if (is_array($utilisateur)) {
+        // Vérifier si la clé 'nom' existe dans le tableau
+        if (isset($utilisateur['nom'])) {
+            // Accéder au nom de l'utilisateur
+            echo "Nom de l'utilisateur : " . $utilisateur['nom'];
+        } else {
+            echo "La clé 'nom' n'existe pas dans le tableau.";
+        }
+    } else {
+        echo "Aucun utilisateur trouvé ou erreur dans la récupération des données.";
+    }
+
+    var_dump($email, $mot_de_passe, $utilisateur); // Ajoutez ceci pour voir les valeurs
+
+    if ($utilisateur && password_verify($mot_de_passe, $utilisateur['mot_de_passe'])) {
+        $_SESSION['utilisateur_id'] = $utilisateur['nom'];
+    } else {
+        echo "Identifiants incorrects.";
+    }
+}
+
+// Publication d'un message
+if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_SESSION['utilisateur_id'], $_POST['contenu_text'])) {
+    $contenu = $_POST['contenu_text'];
+    $utilisateur_id =['utilisateur_id'];
+
+    // Préparer la requête SQL
+    $stmt = $conn->prepare("INSERT INTO messages (utilisateur_id, contenu_text) VALUES (?, ?)");
+
+    // Lier les paramètres avec bindParam (au lieu de bind_param)
+    $stmt->bindParam(1, $utilisateur_id, PDO::PARAM_INT); // Lier l'ID utilisateur
+    $stmt->bindParam(2, $contenu, PDO::PARAM_STR); // Lier le texte du message
+
+    // Exécuter la requête
+    $stmt->execute();
+
+    // Redirection après insertion
+    header('Location: index.php');
+    exit();
+}
+
+
+// Déconnexion
+if (isset($_GET['action']) && $_GET['action'] == 'logout') {
+    session_destroy();
+    header('Location: index.php');
+    exit();
+}
+
+// Récupérer les 10 derniers messages
+$stmt = $conn->prepare("SELECT messages.*, utilisateurs.nom FROM messages JOIN utilisateurs ON contenu_text = utilisateurs.id ORDER BY messages.date_post DESC LIMIT 10");
+$stmt->execute();
+$messages = $stmt->fetchAll(PDO::FETCH_ASSOC); // Récupère tous les messages dans un tableau associatif
+
+?>
+
+<?php if (!empty($messages)): ?>
+    <?php foreach ($messages as $message): ?>
+        <p><strong><?= htmlspecialchars($message['nom']) ?> :</strong> <?= htmlspecialchars($message['contenu_text']) ?> <em><?= htmlspecialchars($message['date_post']) ?></em></p>
+    <?php endforeach; ?>
+<?php else: ?>
+    <p>Aucun message trouvé.</p>
+<?php endif; ?>
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Mini Chat</title>
+    <style>
+        /* Un peu de CSS pour l'apparence */
+    </style>
+</head>
+<body>
+
+    <?php include 'connexion_bdd.php' ?>
+
+    <h1>Inscription</h1>
+        <form action="index.php" method="POST" enctype="multipart/form-data">
+            <input type="text" name="nom" placeholder="Nom" required>
+            <input type="email" name="email" placeholder="Email" required>
+            <input type="password" name="mot_de_passe" placeholder="Mot de passe" required>
+            <input type="file" name="photo_profil">
+            <button type="submit">S'inscrire</button>
+        </form>
+
+    <h2>Connexion</h2>
+
+        <form action="index.php" method="POST">
+            <input type="email" name="email" placeholder="Email" required>
+            <input type="password" name="mot_de_passe" placeholder="Mot de passe" required>
+            <button type="submit">Se connecter</button>
+        </form>
+
+    <h3>Discussion</h3>
+
+        <button onclick="toggleMessages()">Afficher/Masquer les messages</button>
+
+        <div id="messages">
+            <?php foreach ($messages as $message): ?>
+                <p><strong><?= htmlspecialchars($message['nom']) ?>:</strong> <?= htmlspecialchars($message['contenu_text']) ?> <em><?= $message['date_post'] ?></em></p>
+            <?php endforeach; ?>
+        </div>
+
+        <?php $isLoggedIn = isset($_SESSION['utilisateurs_id']); if ($isLoggedIn): ?>
+            <form action="index.php" method="POST">
+                <textarea name="contenu_text" placeholder="Votre message..." required></textarea>
+                <button type="submit">Envoyer</button>
+            </form>
+            <a href="index.php?action=logout">Se déconnecter</a>
+        <?php else: ?>
+            <p>Veuillez vous connecter pour participer à la discussion.</p>
+        <?php endif; ?>
+</body>
+
+<script>
+function toggleMessages() {
+    const messagesDiv = document.getElementById('messages');
+    messagesDiv.style.display = messagesDiv.style.display === 'none' ? 'block' : 'none';
+}
+</script>
+</html>
